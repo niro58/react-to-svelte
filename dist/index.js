@@ -32,137 +32,195 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const babelParser = __importStar(require("@babel/parser"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 class TagProcessor {
     constructor() {
+        this.up = [];
         this.shadMultipleImportComponents = [];
         this.typeFns = {
-            File: (node) => this.file(node),
-            ImportDeclaration: (node) => this.importDeclaration(node),
-            ExportDefaultDeclaration: (node) => this.exportDefaultDeclaration(node),
-            JSXElement: (node) => this.jsxElement(node),
-            JSXText: (node) => this.jsxText(node),
-            Program: (node) => this.program(node),
-            BlockStatement: (node) => this.blockStatement(node),
-            ReturnStatement: (node) => this.returnStatement(node),
-            LogicalExpression: (node) => this.logicalExpression(node),
-            ConditionalExpression: (node) => this.conditionalExpression(node),
-            JSXExpressionContainer: (node) => this.jsxExpressionContainer(node),
-        };
-    }
-    blockStatement(n) {
-        return {
-            next: n.body,
-        };
-    }
-    returnStatement(n) {
-        return {
-            next: n.argument,
+            File: () => this.file(),
+            ImportDeclaration: () => this.importDeclaration(),
+            ExportDefaultDeclaration: () => this.exportDefaultDeclaration(),
+            JSXElement: () => this.jsxElement(),
+            JSXText: () => this.jsxText(),
+            Program: () => this.program(),
+            BlockStatement: () => this.blockStatement(),
+            ReturnStatement: () => this.returnStatement(),
+            LogicalExpression: () => this.logicalExpression(),
+            JSXExpressionContainer: () => this.jsxExpressionContainer(),
+            ArrayExpression: () => this.arrayExpression(),
+            ArrayPattern: () => this.arrayPattern(),
+            ArrowFunctionExpression: () => this.arrowFunctionExpression(),
+            BinaryExpression: () => this.binaryExpression(),
+            CallExpression: () => this.callExpression(),
+            FunctionDeclaration: () => this.functionDeclaration(),
+            Identifier: () => this.identifier(),
+            ImportDefaultSpecifier: () => this.importDefaultSpecifier(),
+            JSXAttribute: () => this.jsxAttribute(),
+            JSXIdentifier: () => this.jsxIdentifier(),
+            JSXOpeningElement: () => this.jsxOpeningElement(),
+            JSXClosingElement: () => this.jsxClosingElement(),
+            JSXMemberExpression: () => this.jsxMemberExpression(),
+            MemberExpression: () => this.memberExpression(),
+            NullLiteral: () => this.nullLiteral(),
+            NumericLiteral: () => this.numericLiteral(),
+            ObjectExpression: () => this.objectExpression(),
+            ObjectPattern: () => this.objectPattern(),
+            ObjectProperty: () => this.objectProperty(),
+            StringLiteral: () => this.stringLiteral(),
+            TemplateLiteral: () => this.templateLiteral(),
+            TemplateElement: () => this.templateElement(),
+            VariableDeclaration: () => this.variableDeclaration(),
+            VariableDeclarator: () => this.variableDeclarator(),
+            ConditionalExpression: () => this.conditionalExpression(),
         };
     }
     process(node) {
-        if (!node || !Object.keys(this.typeFns).includes(node.type))
-            return;
-        return this.typeFns[node.type](node);
+        this.currNode = node;
+        if (!node || !Object.keys(this.typeFns).includes(this.currNode.type)) {
+            return node;
+        }
+        const res = this.typeFns[this.currNode.type]();
+        this.up = [this.currNode.type, ...this.up];
+        return res;
     }
-    jsxExpressionContainer(n) {
+    blockStatement() {
         return {
-            next: n.expression,
+            next: this.currNode.body,
         };
     }
-    conditionalExpression(n) { }
-    logicalExpression(n) {
-        if (n.operator === "&&") {
+    returnStatement() {
+        return {
+            next: this.currNode.argument,
+        };
+    }
+    jsxExpressionContainer() {
+        console.log(this.up[1]);
+        return {
+            next: ["{", this.currNode.expression, "}"],
+        };
+    }
+    templateLiteral() {
+        let expressions = [];
+        this.currNode.expressions.forEach((expression) => {
+            expressions.push("${", expression, "}");
+        });
+        return {
+            next: ["`", ...this.currNode.quasis, ...expressions, "`"],
+        };
+    }
+    templateElement() {
+        return this.currNode.value.raw;
+    }
+    logicalExpression() {
+        if (this.currNode.operator === "&&") {
             return {
-                openingTag: "{#if " + n.left.name + "}",
-                next: n.right,
+                openingTag: "{#if " + this.currNode.left.name + "}",
+                next: this.currNode.right,
                 closingTag: "{/if}",
             };
         }
     }
-    file(n) {
+    file() {
         return {
-            next: n.program,
+            next: this.currNode.program,
         };
     }
-    program(n) {
+    program() {
         return {
-            openingTag: "<script lang='ts'>",
-            next: n.body,
+            next: this.currNode.body,
         };
     }
-    exportDefaultDeclaration(n) {
+    exportDefaultDeclaration() {
         return {
-            next: n.declaration.body,
-            openingTag: "</script>",
+            next: this.currNode.declaration.body,
         };
     }
-    importDeclaration(n) {
+    importDeclaration() {
         var _a;
         let importDeclaration = "import ";
-        const value = n.source.value;
-        const isShadImport = value === null || value === void 0 ? void 0 : value.toString().startsWith("@/components/ui");
-        const isMultipleImport = n.specifiers.length > 1;
-        if (value === "react" || !isShadImport) {
+        let importModule = this.currNode.source.value;
+        const isShadImport = importModule === null || importModule === void 0 ? void 0 : importModule.toString().startsWith("@/components/ui");
+        const isMultipleImport = this.currNode.specifiers.length > 1;
+        const replaces = {
+            "lucide-react": "lucide-svelte",
+        };
+        if (importModule === "react" ||
+            (!isShadImport && !(importModule in replaces))) {
             return null;
         }
-        const componentName = (_a = value === null || value === void 0 ? void 0 : value.toString().split("/")) === null || _a === void 0 ? void 0 : _a.pop();
-        if (!componentName)
-            return;
-        const componentNameUppercased = componentName.charAt(0).toUpperCase() + componentName.slice(1);
-        if (isMultipleImport) {
-            this.shadMultipleImportComponents.push(componentName);
-            importDeclaration += `* as ${componentNameUppercased} from '$lib/components/ui/${componentName}/index.js'`;
+        if (importModule in replaces) {
+            importModule = replaces[importModule];
         }
-        else {
-            importDeclaration += `${componentNameUppercased} from '$lib/components/ui/${componentName}/${componentName}.svelte'`;
-        }
-        importDeclaration += ";";
-        return importDeclaration;
-    }
-    jsxText(n) {
-        return n.value;
-    }
-    jsxElement(n) {
-        const componentName = this.correctComponentName(n.openingElement.name.name);
-        return {
-            openingTag: `<${componentName}${this.getAttributes(n.openingElement.attributes)}>`,
-            next: n.children,
-            closingTag: `</${componentName}>`,
-        };
-    }
-    getAttributes(attributes) {
-        if (!attributes)
-            return "";
-        let att = [];
-        attributes.map((a) => {
-            const name = a.name.name;
-            const value = a.value.value;
-            if (name === "className") {
-                att.push(`class="${value}"`);
-            }
-            else if (name === "htmlFor") {
-                att.push(`for="${value}"`);
-            }
-            else if (name.startsWith("on")) {
-                att.push(`${name.toLowerCase()}={()=>{}}`);
+        if (isShadImport) {
+            const componentName = (_a = importModule === null || importModule === void 0 ? void 0 : importModule.toString().split("/")) === null || _a === void 0 ? void 0 : _a.pop();
+            if (!componentName)
+                return;
+            const componentNameUppercased = componentName.charAt(0).toUpperCase() + componentName.slice(1);
+            if (isMultipleImport) {
+                this.shadMultipleImportComponents.push(componentName);
+                importDeclaration += `* as ${componentNameUppercased} from '$lib/components/ui/${componentName}/index.js'`;
             }
             else {
-                att.push(`${name}="${value}"`);
+                importDeclaration += `${componentNameUppercased} from '$lib/components/ui/${componentName}/${componentName}.svelte'`;
             }
-        });
-        return " " + att.join(" ");
+            importDeclaration += ";";
+        }
+        else {
+            const specifiers = this.currNode.specifiers.map((s) => {
+                return s.imported.name;
+            });
+            if (specifiers.length > 1) {
+                importDeclaration += `{${specifiers.join(",")}}`;
+            }
+            else {
+                importDeclaration += specifiers[0];
+            }
+            importDeclaration += ` from '${importModule}'`;
+        }
+        return {
+            part: "script",
+            next: importDeclaration + "\n",
+        };
     }
-    correctComponentName(name) {
+    jsxText() {
+        return this.currNode.value;
+    }
+    jsxElement() {
+        return {
+            next: [
+                this.currNode.openingElement,
+                ...this.currNode.children,
+                this.currNode.closingElement,
+            ],
+        };
+    }
+    correctComponentName(memberExpression) {
+        let name = "";
+        if ("property" in memberExpression) {
+            name = memberExpression.property.name;
+        }
+        else if ("name" in memberExpression) {
+            name = memberExpression.name;
+        }
         if (name[0] === name[0].toLowerCase()) {
             return name;
         }
         const res = name.split(/(?=[A-Z])/);
         if (res.length === 1) {
-            if (this.shadMultipleImportComponents.includes(name.toLowerCase())) {
+            if (this.shadMultipleImportComponents.includes(name)) {
                 return `${name}.Root`;
             }
             else {
@@ -173,50 +231,292 @@ class TagProcessor {
             return res.join(".");
         }
     }
+    arrayExpression() {
+        return {
+            openingTag: "[",
+            next: this.currNode.elements,
+            closingTag: "]\n",
+        };
+    }
+    arrayPattern() {
+        return {
+            next: this.currNode.elements,
+        };
+    }
+    arrowFunctionExpression() {
+        return {
+            next: [this.currNode.params, this.currNode.body],
+        };
+    }
+    binaryExpression() {
+        return {
+            next: [this.currNode.left, "===", this.currNode.right],
+        };
+    }
+    callExpression() {
+        let name = this.currNode.callee.name;
+        if (name) {
+            const nameCorrections = {
+                useState: "$state",
+            };
+            if (name in nameCorrections) {
+                name = nameCorrections[name];
+            }
+            return {
+                openingTag: name + "(",
+                next: this.currNode.arguments,
+                closingTag: ")\n",
+            };
+        }
+        else {
+            const actionType = this.currNode.callee.property.name;
+            if (actionType === "map") {
+                return {
+                    next: [
+                        "#each ",
+                        this.currNode.callee,
+                        "}",
+                        ...this.currNode.arguments,
+                        "{/each",
+                    ],
+                };
+            }
+            return {
+                next: [this.currNode.callee, "}", ...this.currNode.arguments, "{"],
+            };
+        }
+    }
+    functionDeclaration() {
+        const name = this.currNode.id.name;
+        if (name[0] == name[0].toUpperCase()) {
+            return {
+                openingTag: `{#snippet ${name}()}`,
+                next: this.currNode.body,
+                closingTag: "{/snippet}",
+            };
+        }
+    }
+    identifier() {
+        return this.currNode.name;
+    }
+    importDefaultSpecifier() {
+        return {
+            next: this.currNode.local,
+        };
+    }
+    jsxAttribute() {
+        let name = this.currNode.name.name;
+        const disabledAttrs = ["key"];
+        if (disabledAttrs.includes(name)) {
+            return null;
+        }
+        const replaces = {
+            className: "class",
+            htmlFor: "for",
+        };
+        if (name in replaces) {
+            name = replaces[name];
+        }
+        if (name.startsWith("on")) {
+            name = name.toLowerCase();
+        }
+        if (this.currNode.value.type === "JSXExpressionContainer") {
+            return {
+                next: [name, "={", this.currNode.value.expression, "} "],
+            };
+        }
+        else {
+            return {
+                next: [name, "=", this.currNode.value, ""],
+            };
+        }
+    }
+    jsxIdentifier() {
+        return this.currNode.name;
+    }
+    jsxOpeningElement() {
+        return {
+            openingTag: "<",
+            next: [this.currNode.name, " ", ...this.currNode.attributes],
+            closingTag: ">\n",
+        };
+    }
+    jsxClosingElement() {
+        return {
+            openingTag: "</",
+            next: this.currNode.name,
+            closingTag: ">\n",
+        };
+    }
+    jsxMemberExpression() {
+        return {
+            next: [
+                this.correctComponentName(this.currNode.object),
+                ".",
+                this.currNode.property,
+            ],
+        };
+    }
+    memberExpression() {
+        return {
+            next: this.currNode.object,
+        };
+    }
+    nullLiteral() {
+        return "null";
+    }
+    numericLiteral() {
+        return this.currNode.value.toString();
+    }
+    objectExpression() {
+        return {
+            openingTag: "{",
+            next: this.currNode.properties,
+            closingTag: "}",
+        };
+    }
+    objectPattern() {
+        return this.currNode.properties;
+    }
+    objectProperty() {
+        return {
+            next: [this.currNode.key, ":", this.currNode.value, ","],
+        };
+    }
+    stringLiteral() {
+        return this.currNode.extra.raw;
+    }
+    variableDeclaration() {
+        if (this.currNode.declarations.length > 1) {
+            return {
+                part: "script",
+                openingTag: "let ",
+                next: this.currNode.declarations[0],
+            };
+        }
+        else {
+            return {
+                part: "script",
+                openingTag: "const ",
+                next: this.currNode.declarations,
+            };
+        }
+    }
+    variableDeclarator() {
+        let varName = this.currNode.id.name;
+        if (this.currNode.id.type === "ArrayPattern") {
+            varName = this.currNode.id.elements[0].name;
+        }
+        return {
+            openingTag: varName + " = ",
+            next: this.currNode.init,
+        };
+    }
+    conditionalExpression() {
+        return {
+            next: [
+                this.currNode.test,
+                "?",
+                this.currNode.consequent,
+                ":",
+                this.currNode.alternate,
+            ],
+        };
+    }
 }
 class FileManager {
     static writeToFile(filePath, content) {
         fs.writeFileSync(filePath, content, "utf8");
-        console.log(`Writing to ${filePath}`);
     }
     static readFromFile(filePath) {
         return fs.readFileSync(filePath, "utf8");
     }
 }
-const reactScript = FileManager.readFromFile(path.join(__dirname, "..", "input", "react.tsx"));
-let tagProcessor = new TagProcessor();
-let result = "";
-function reactToSvelte(node) {
-    const nodeResult = tagProcessor.process(node);
-    if (!nodeResult || nodeResult === null)
-        return;
-    if (typeof nodeResult === "string") {
-        result += nodeResult + "\n";
+class ReactToSvelte {
+    constructor() {
+        this.script = "";
+        this.header = "";
+        this.body = "";
+        this.tagProcessor = new TagProcessor();
     }
-    else if (nodeResult && typeof nodeResult === "object") {
-        if ("openingTag" in nodeResult) {
-            result += nodeResult.openingTag + "\n";
+    convert(filepath) {
+        return __awaiter(this, void 0, void 0, function* () {
+            this.clear();
+            const reactScript = FileManager.readFromFile(filepath);
+            const reactParsed = babelParser.parse(reactScript, {
+                sourceType: "module",
+                plugins: ["jsx", "typescript"],
+            });
+            FileManager.writeToFile(path.join(__dirname, "..", "output", "reactParsed.json"), JSON.stringify(reactParsed, null, 2));
+            this.process(reactParsed);
+        });
+    }
+    write(content, part) {
+        if (part === "script") {
+            this.script += content;
         }
-        if ("next" in nodeResult) {
-            if (Array.isArray(nodeResult.next)) {
-                nodeResult.next.map((n) => {
-                    reactToSvelte(n);
-                });
+        else if (part === "header") {
+            this.header += content;
+        }
+        else {
+            this.body += content;
+        }
+    }
+    process(node, part = "body") {
+        const nodeResult = this.tagProcessor.process(node);
+        if (!nodeResult || nodeResult === null)
+            return;
+        if (typeof nodeResult === "string") {
+            this.write(nodeResult, part);
+        }
+        else if (nodeResult && typeof nodeResult === "object") {
+            if ("part" in nodeResult) {
+                part = nodeResult.part;
             }
-            else {
-                reactToSvelte(nodeResult.next);
+            if ("openingTag" in nodeResult) {
+                this.write(nodeResult.openingTag, part);
+            }
+            if ("next" in nodeResult) {
+                if (Array.isArray(nodeResult.next)) {
+                    nodeResult.next.map((n) => {
+                        this.process(n, part);
+                    });
+                }
+                else {
+                    this.process(nodeResult.next, part);
+                }
+            }
+            if ("closingTag" in nodeResult) {
+                this.write(nodeResult.closingTag, part);
             }
         }
-        if ("closingTag" in nodeResult) {
-            result += nodeResult.closingTag + "\n";
+    }
+    export(filename) {
+        let result = "";
+        if (this.script.length > 0) {
+            result += `
+      <script lang="ts">
+      ${this.script}
+      </script>\n`;
         }
+        result += `${this.body}\n`;
+        if (this.header) {
+            result += `      
+      <svelte:head>
+        ${this.header}
+      </svelte:head>
+    `;
+        }
+        FileManager.writeToFile(filename, result);
+    }
+    clear() {
+        this.script = "";
+        this.header = "";
+        this.body = "";
     }
 }
-const reactParsed = babelParser.parse(reactScript, {
-    sourceType: "module",
-    plugins: ["jsx", "typescript"],
-});
-FileManager.writeToFile(path.join(__dirname, "..", "output", "reactParsed.json"), JSON.stringify(reactParsed, null, 2));
+const converter = new ReactToSvelte();
+const inputPath = path.join(__dirname, "..", "input", "react.tsx");
+converter.convert(inputPath);
 const outputPath = path.join(__dirname, "..", "output", "result.svelte");
-reactToSvelte(reactParsed);
-FileManager.writeToFile(outputPath, result);
+converter.export(outputPath);
